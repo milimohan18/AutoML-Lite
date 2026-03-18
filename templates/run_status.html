@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Run: {{ run.id[:8] }}...</li>
+            </ol>
+        </nav>
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="card-title mb-1">Status: 
+                        <span id="statusBadge" class="badge bg-secondary">{{ run.status }}</span>
+                    </h5>
+                    <p class="text-muted mb-0 small">Dataset: {{ run.filename.split('/')[-1].split('\\')[-1] }} | Target: {{ run.target_column }}</p>
+                </div>
+                <div id="loadingSpinner" style="display: {% if run.status in ['QUEUED', 'RUNNING'] %}block{% else %}none{% endif %};">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <div id="downloadsDiv" style="display: {% if run.status == 'COMPLETED' %}block{% else %}none{% endif %};">
+                    <a href="/api/runs/{{ run.id }}/download/model" class="btn btn-sm btn-outline-success">Download Best Model</a>
+                    <a href="/api/runs/{{ run.id }}/download/report" class="btn btn-sm btn-outline-info">Download HTML Report</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="resultsContainer" style="display: {% if run.status == 'COMPLETED' %}block{% else %}none{% endif %};">
+    <ul class="nav nav-tabs" id="myTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">Overview & EDA</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="models-tab" data-bs-toggle="tab" data-bs-target="#models" type="button" role="tab">Models Leaderboard</button>
+        </li>
+    </ul>
+    
+    <div class="tab-content border border-top-0 p-4 bg-white" id="myTabContent">
+        <!-- Overview Tab -->
+        <div class="tab-pane fade show active" id="overview" role="tabpanel">
+            <div class="row">
+                <div id="edaContent" class="col-md-12">
+                    <h5>Dataset Summary</h5>
+                    <ul id="datasetSummaryList"></ul>
+                    
+                    <h5 class="mt-4">Target Distribution</h5>
+                    <img id="targetDistImg" src="" class="img-fluid border" style="max-height: 400px; display: none;">
+                    
+                    <h5 class="mt-4">Missing Values</h5>
+                    <img id="missingValsImg" src="" class="img-fluid border" style="max-height: 400px; display: none;">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Models Tab -->
+        <div class="tab-pane fade" id="models" role="tabpanel">
+            <h5>Models Evaluated</h5>
+            <div class="table-responsive">
+                <table class="table table-striped" id="leaderboardTable">
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>CV Score</th>
+                            <th>Training Time (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            
+            <div class="alert alert-success mt-4">
+                <h5 class="alert-heading">Best Model Details</h5>
+                <div id="bestModelDetails"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="errorContainer" class="alert alert-danger mt-4" style="display: {% if run.status == 'FAILED' %}block{% else %}none{% endif %};">
+    <h5>Run Failed</h5>
+    <pre id="errorOutput" style="white-space: pre-wrap; font-size: 0.85em;">{{ run.error_message }}</pre>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const runId = "{{ run.id }}";
+    let isPolling = parseInt("{{ 1 if run.status in ['QUEUED', 'RUNNING'] else 0 }}");
+    
+    if(!isPolling && "{{ run.status }}" === "COMPLETED") {
+        fetchAndRenderResults();
+    }
+
+    async function pollStatus() {
+        try {
+            const res = await fetch(`/api/runs/${runId}`);
+            const data = await res.json();
+            
+            const badge = document.getElementById('statusBadge');
+            badge.textContent = data.status;
+            
+            if(data.status === 'RUNNING') {
+                badge.className = 'badge bg-warning text-dark';
+            } else if(data.status === 'COMPLETED') {
+                badge.className = 'badge bg-success';
+                document.getElementById('loadingSpinner').style.display = 'none';
+                document.getElementById('downloadsDiv').style.display = 'block';
+                document.getElementById('resultsContainer').style.display = 'block';
+                isPolling = false;
+                fetchAndRenderResults();
+            } else if(data.status === 'FAILED') {
+                badge.className = 'badge bg-danger';
+                document.getElementById('loadingSpinner').style.display = 'none';
+                document.getElementById('errorContainer').style.display = 'block';
+                document.getElementById('errorOutput').textContent = data.error_message || "Unknown error";
+                isPolling = false;
+            }
+        } catch(e) {
+            console.error(e);
+        }
+        
+        if(isPolling) {
+            setTimeout(pollStatus, 3000);
+        }
+    }
+
+    if(isPolling) {
+        setTimeout(pollStatus, 3000);
+    }
+    
+    async function fetchAndRenderResults() {
+        try {
+            const res = await fetch(`/api/runs/${runId}`);
+            const data = await res.json();
+            
+            // Render EDA Metadata
+            if(data.dataset_summary) {
+                const sumList = document.getElementById('datasetSummaryList');
+                sumList.innerHTML = `
+                    <li><strong>Rows:</strong> ${data.dataset_summary.n_rows}</li>
+                    <li><strong>Columns:</strong> ${data.dataset_summary.n_columns}</li>
+                `;
+            }
+            
+            // Images
+            document.getElementById('targetDistImg').src = `/artifacts/runs/${runId}/target_distribution.png`;
+            document.getElementById('targetDistImg').style.display = 'block';
+            
+            // try to load missing vals img (might not exist if no missing)
+            const mvImg = document.getElementById('missingValsImg');
+            mvImg.src = `/artifacts/runs/${runId}/missing_values.png`;
+            mvImg.onload = () => mvImg.style.display = 'block';
+            mvImg.onerror = () => { mvImg.style.display = 'none'; mvImg.previousElementSibling.style.display = 'none'; };
+            
+            // Leaderboard
+            if(data.metrics_json && data.metrics_json.leaderboard) {
+                const tbody = document.getElementById('leaderboardTable').querySelector('tbody');
+                tbody.innerHTML = '';
+                
+                // Sort by score descending
+                const models = Object.entries(data.metrics_json.leaderboard);
+                models.sort((a,b) => b[1].cv_score - a[1].cv_score);
+                
+                for(let [name, metrics] of models) {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${name}</td>
+                            <td>${metrics.cv_score.toFixed(4)}</td>
+                            <td>${metrics.train_time_seconds.toFixed(2)}</td>
+                        </tr>
+                    `;
+                }
+                
+                // Best Model
+                const bm = data.metrics_json.best_model;
+                let testMetricsHtml = Object.entries(bm.test_metrics).map(([k,v]) => `<li>${k}: ${v.toFixed(4)}</li>`).join('');
+                
+                document.getElementById('bestModelDetails').innerHTML = `
+                    <p><strong>Name:</strong> ${bm.name}</p>
+                    <p><strong>Primary CV Metric (${bm.primary_metric}):</strong> ${bm.cv_score.toFixed(4)}</p>
+                    <h6>Test Set Metrics:</h6>
+                    <ul>${testMetricsHtml}</ul>
+                `;
+            }
+        } catch(e) {
+            console.error("Failed to render results", e);
+        }
+    }
+</script>
+{% endblock %}

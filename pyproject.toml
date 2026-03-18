@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "automl_lite"
+version = "0.1.0"
+description = "AutoML Lite: A Web Application for Automated Machine Learning"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "jinja2",
+    "python-multipart",
+    "sqlalchemy",
+    "pandas",
+    "scikit-learn",
+    "matplotlib",
+    "seaborn",
+    "joblib",
+]
+
+[tool.setuptools.packages.find]
+include = ["automl_lite*", "backend*"]

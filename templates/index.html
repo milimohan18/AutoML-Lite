@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Start New AutoML Run</h4>
+            </div>
+            <div class="card-body">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Upload Dataset (CSV)</label>
+                        <input class="form-control" type="file" id="file" name="file" accept=".csv" required>
+                    </div>
+
+                    <!-- Hidden until file is selected -->
+                    <div id="configSection" style="display: none;">
+                        <div class="mb-3">
+                            <label for="target_column" class="form-label">Target Column</label>
+                            <input type="text" class="form-control" id="target_column" name="target_column" placeholder="e.g. 'price' or 'species'" required>
+                            <small class="text-muted">Enter the exact name of the column you want to predict.</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="task_type" class="form-label">Task Type (Optional)</label>
+                            <select class="form-select" id="task_type" name="task_type">
+                                <option value="auto">Auto-detect</option>
+                                <option value="classification">Classification</option>
+                                <option value="regression">Regression</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="time_budget" class="form-label">Time Budget (Seconds) - Optional</label>
+                            <input type="number" class="form-control" id="time_budget" name="time_budget" placeholder="120">
+                            <small class="text-muted">Currently mocked for MVP, but placeholder for execution time bounds.</small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success w-100 mt-2" id="submitBtn">
+                            <span class="spinner-border spinner-border-sm d-none" id="submitSpinner" role="status" aria-hidden="true"></span>
+                            Start AutoML
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('file').addEventListener('change', function(e) {
+        if(this.files.length > 0) {
+            document.getElementById('configSection').style.display = 'block';
+        }
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('file');
+        const targetColumn = document.getElementById('target_column').value;
+        const taskType = document.getElementById('task_type').value;
+        const timeBudget = document.getElementById('time_budget').value;
+        
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('target_column', targetColumn);
+        formData.append('task_type', taskType);
+        if(timeBudget) formData.append('time_budget', timeBudget);
+        
+        const btn = document.getElementById('submitBtn');
+        const spinner = document.getElementById('submitSpinner');
+        btn.disabled = true;
+        spinner.classList.remove('d-none');
+        
+        try {
+            const response = await fetch('/api/runs/', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if(response.ok) {
+                const data = await response.json();
+                window.location.href = `/runs/${data.id}`;
+            } else {
+                const errorText = await response.text();
+                alert(`Error: ${response.status} - ${errorText}`);
+                btn.disabled = false;
+                spinner.classList.add('d-none');
+            }
+        } catch(error) {
+            alert('Network error occurred.');
+            btn.disabled = false;
+            spinner.classList.add('d-none');
+        }
+    });
+</script>
+{% endblock %}
