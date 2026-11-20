@@ -57,6 +57,7 @@ html_template = """
 
     <h2>Data Overview & EDA</h2>
     <img src="target_distribution.png" alt="Target Distribution">
+    <img src="correlation_heatmap.png" alt="Feature Correlation Heatmap" onerror="this.style.display='none'">
 </body>
 </html>
 """

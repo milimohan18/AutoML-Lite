@@ -12,6 +12,9 @@ from backend.models import Run, RunStatus, TaskType
 from backend.schemas import RunResponse
 from backend.background import execute_run
 from automl_lite.config import get_run_dir, BASE_DIR
+from automl_lite.wordpress_publisher import (
+    publish_report, WordPressError, WordPressConfigError, WordPressConnectionError
+)
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
@@ -58,6 +61,38 @@ def get_run(run_id: str, db: Session = Depends(get_db)):
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     return run
+
+@router.post("/{run_id}/publish")
+def publish_run(run_id: str, db: Session = Depends(get_db)):
+    """Publish a finished run's HTML report to WordPress and store the post URL."""
+    run = db.query(Run).filter(Run.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != RunStatus.COMPLETED.value:
+        raise HTTPException(status_code=400, detail=f"Run is not finished yet (status: {run.status})")
+
+    # Already published: return the existing post instead of creating a duplicate
+    if run.wordpress_url:
+        return {"run_id": run_id, "wordpress_url": run.wordpress_url}
+
+    report_path = get_run_dir(run_id) / "report.html"
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="This run has no HTML report to publish")
+
+    title = f"AutoML Lite Report: {run.target_column} ({run.task_type})"
+    try:
+        url = publish_report(title, report_path.read_text())
+    except WordPressConfigError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except WordPressConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except WordPressError as e:
+        # Wrong credentials or a request WordPress rejected
+        raise HTTPException(status_code=502, detail=str(e))
+
+    run.wordpress_url = url
+    db.commit()
+    return {"run_id": run_id, "wordpress_url": url}
 
 @router.get("/{run_id}/download/model")
 def download_model(run_id: str):

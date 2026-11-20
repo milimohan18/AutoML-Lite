@@ -35,3 +35,4 @@ class Run(Base):
     best_metric_score = Column(Float, nullable=True)
     best_metric_name = Column(String, nullable=True)
     metrics_json = Column(JSON, nullable=True)
+    wordpress_url = Column(String, nullable=True)  # Set once the report is published

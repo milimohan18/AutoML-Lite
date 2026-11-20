@@ -3,7 +3,11 @@ import time
 from typing import Dict, Any, Tuple
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import StratifiedKFold, KFold, cross_validate
-from sklearn.metrics import accuracy_score, r2_score
+from sklearn.metrics import (
+    accuracy_score, r2_score,
+    precision_score, recall_score, f1_score,
+    mean_absolute_error, root_mean_squared_error
+)
 
 from automl_lite.preprocessing import build_preprocessor
 from automl_lite.models import get_models, get_primary_metric
@@ -54,9 +58,15 @@ def train_and_evaluate(X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.Dat
     y_pred = best_pipeline.predict(X_test)
     test_metrics = {}
     if task_type == 'classification':
-        test_metrics['accuracy'] = float(accuracy_score(y_test, y_pred))
+        test_metrics['accuracy']  = float(accuracy_score(y_test, y_pred))
+        # 'weighted' works for any labels (e.g. "benign"/"malignant"); 'binary' assumes pos_label=1
+        test_metrics['precision'] = float(precision_score(y_test, y_pred, average='weighted', zero_division=0))
+        test_metrics['recall']    = float(recall_score(y_test, y_pred, average='weighted', zero_division=0))
+        test_metrics['f1_score']  = float(f1_score(y_test, y_pred, average='weighted', zero_division=0))
     else:
-        test_metrics['r2'] = float(r2_score(y_test, y_pred))
+        test_metrics['r2']   = float(r2_score(y_test, y_pred))
+        test_metrics['mae']  = float(mean_absolute_error(y_test, y_pred))
+        test_metrics['rmse'] = float(root_mean_squared_error(y_test, y_pred))
         
     best_model_info = {
         "name": best_model_name,

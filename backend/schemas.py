@@ -23,6 +23,7 @@ class RunResponse(BaseModel):
     best_metric_score: Optional[float] = None
     best_metric_name: Optional[str] = None
     metrics_json: Optional[Dict[str, Any]] = None
+    wordpress_url: Optional[str] = None
 
     class Config:
         from_attributes = True

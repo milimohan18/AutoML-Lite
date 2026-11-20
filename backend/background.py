@@ -25,10 +25,12 @@ def execute_run(run_id: str):
         db.commit()
 
         run_dir = get_run_dir(run_id)
-        
-        # 1. Load Data
+
+        # 1. Load Data (headers are whitespace-stripped, so strip the target too)
         df = load_data(run.filename)
-        
+        run.target_column = run.target_column.strip()
+        db.commit()
+
         # 2. Infer Task Type
         if run.requested_task_type == "auto":
             task_type = infer_task_type(df, run.target_column)
@@ -84,7 +86,7 @@ def execute_run(run_id: str):
         run.best_metric_score = best_model_info["cv_score"]
         run.best_metric_name = best_model_info["primary_metric"]
         run.metrics_json = {"leaderboard": leaderboard, "best_model": best_model_info}
-        
+
         db.commit()
 
     except Exception as e:

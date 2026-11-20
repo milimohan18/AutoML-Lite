@@ -4,11 +4,14 @@ from typing import Tuple
 def load_data(filepath: str) -> pd.DataFrame:
     """Load dataset from CSV with error handling for common encodings."""
     try:
-        return pd.read_csv(filepath)
+        df = pd.read_csv(filepath)
     except UnicodeDecodeError:
-        return pd.read_csv(filepath, encoding="ISO-8859-1")
+        df = pd.read_csv(filepath, encoding="ISO-8859-1")
     except Exception as e:
         raise ValueError(f"Failed to read CSV: {e}")
+    # Strip stray whitespace from headers so "mean area " matches "mean area"
+    df.columns = df.columns.str.strip()
+    return df
 
 def infer_task_type(df: pd.DataFrame, target_column: str) -> str:
     """Infer whether task is classification or regression based on target_column."""

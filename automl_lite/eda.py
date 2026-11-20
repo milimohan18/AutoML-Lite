@@ -1,4 +1,6 @@
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")  # Non-GUI backend: charts are drawn in background threads
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -67,4 +69,28 @@ def generate_eda(df: pd.DataFrame, target_column: str, task_type: str, run_dir: 
         for col in cat_features
     }
     
+    # 5. Correlation Heatmap (Pearson)
+    corr_cols = num_features.copy()
+    if target_column in df.select_dtypes(include=['int64', 'float64']).columns.tolist():
+        corr_cols.append(target_column)
+    
+    if len(corr_cols) >= 2:
+        corr_matrix = df[corr_cols].corr()
+        eda_summary["correlation_matrix"] = {
+            str(k): {str(k2): round(v2, 3) for k2, v2 in v.items()}
+            for k, v in corr_matrix.to_dict().items()
+        }
+
+        plt.figure(figsize=(10, 8))
+        mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+        sns.heatmap(corr_matrix, mask=mask, annot=True, fmt=".2f",
+                    cmap="RdBu_r", center=0, square=True,
+                    linewidths=0.5, cbar_kws={"shrink": 0.8})
+        plt.title("Feature Correlation Matrix (Pearson)")
+        plt.tight_layout()
+        plt.savefig(run_dir / 'correlation_heatmap.png', dpi=150)
+        plt.close()
+    else:
+        eda_summary["correlation_matrix"] = {}
+
     return eda_summary

@@ -26,8 +26,18 @@
                 <div id="downloadsDiv" style="display: {% if run.status == 'COMPLETED' %}block{% else %}none{% endif %};">
                     <a href="/api/runs/{{ run.id }}/download/model" class="btn btn-sm btn-outline-success">Download Best Model</a>
                     <a href="/api/runs/{{ run.id }}/download/report" class="btn btn-sm btn-outline-info">Download HTML Report</a>
+                    <a id="wpLink" href="{{ run.wordpress_url or '#' }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary" style="display: {% if run.wordpress_url %}inline-block{% else %}none{% endif %};">View on WordPress</a>
+                    <button id="wpPublishBtn" type="button" class="btn btn-sm btn-outline-primary" onclick="publishToWordPress()" style="display: {% if run.wordpress_url %}none{% else %}inline-block{% endif %};">
+                        <span class="spinner-border spinner-border-sm d-none" id="wpPublishSpinner" role="status" aria-hidden="true"></span>
+                        <span id="wpPublishText">Publish to WordPress</span>
+                    </button>
                 </div>
             </div>
+        </div>
+
+        <div id="wpAlert" class="alert alert-danger alert-dismissible d-none" role="alert">
+            <strong>Could not publish to WordPress.</strong> <span id="wpAlertMessage"></span>
+            <button type="button" class="btn-close" aria-label="Close" onclick="document.getElementById('wpAlert').classList.add('d-none')"></button>
         </div>
     </div>
 </div>
@@ -55,6 +65,9 @@
                     
                     <h5 class="mt-4">Missing Values</h5>
                     <img id="missingValsImg" src="" class="img-fluid border" style="max-height: 400px; display: none;">
+                    
+                    <h5 class="mt-4">Correlation Heatmap</h5>
+                    <img id="corrHeatmapImg" src="" class="img-fluid border" style="max-height: 500px; display: none;">
                 </div>
             </div>
         </div>
@@ -135,11 +148,44 @@
         setTimeout(pollStatus, 3000);
     }
     
+    async function publishToWordPress() {
+        const btn = document.getElementById('wpPublishBtn');
+        const spinner = document.getElementById('wpPublishSpinner');
+        const btnText = document.getElementById('wpPublishText');
+        const errorAlert = document.getElementById('wpAlert');
+
+        // Loading state
+        btn.disabled = true;
+        spinner.classList.remove('d-none');
+        btnText.textContent = 'Publishing...';
+        errorAlert.classList.add('d-none');
+
+        try {
+            const res = await fetch(`/api/runs/${runId}/publish`, { method: 'POST' });
+            const data = await res.json();
+            if(!res.ok) {
+                throw new Error(data.detail || `Request failed with status ${res.status}`);
+            }
+
+            // Success: swap the button for a link to the new post
+            const link = document.getElementById('wpLink');
+            link.href = data.wordpress_url;
+            link.style.display = 'inline-block';
+            btn.style.display = 'none';
+        } catch(e) {
+            document.getElementById('wpAlertMessage').textContent = e.message;
+            errorAlert.classList.remove('d-none');
+            btn.disabled = false;
+            spinner.classList.add('d-none');
+            btnText.textContent = 'Publish to WordPress';
+        }
+    }
+
     async function fetchAndRenderResults() {
         try {
             const res = await fetch(`/api/runs/${runId}`);
             const data = await res.json();
-            
+
             // Render EDA Metadata
             if(data.dataset_summary) {
                 const sumList = document.getElementById('datasetSummaryList');
@@ -158,6 +204,12 @@
             mvImg.src = `/artifacts/runs/${runId}/missing_values.png`;
             mvImg.onload = () => mvImg.style.display = 'block';
             mvImg.onerror = () => { mvImg.style.display = 'none'; mvImg.previousElementSibling.style.display = 'none'; };
+            
+            // try to load correlation heatmap (might not exist if <2 numeric features)
+            const corrImg = document.getElementById('corrHeatmapImg');
+            corrImg.src = `/artifacts/runs/${runId}/correlation_heatmap.png`;
+            corrImg.onload = () => corrImg.style.display = 'block';
+            corrImg.onerror = () => { corrImg.style.display = 'none'; corrImg.previousElementSibling.style.display = 'none'; };
             
             // Leaderboard
             if(data.metrics_json && data.metrics_json.leaderboard) {

@@ -1,0 +1,533 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Dashboard — AutoML Lite{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+    .stat-card {
+        border: none;
+        border-radius: 12px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        overflow: hidden;
+    }
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    .stat-card .card-body { padding: 1.5rem; }
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .stat-label {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        opacity: 0.8;
+    }
+    .gradient-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
+    .gradient-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: #fff; }
+    .gradient-3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: #fff; }
+    .gradient-4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: #fff; }
+
+    .section-header {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e9ecef;
+    }
+    .section-header .badge {
+        font-size: 0.7rem;
+        vertical-align: middle;
+        margin-left: 0.5rem;
+    }
+    .chart-container {
+        position: relative;
+        height: 320px;
+        width: 100%;
+    }
+    .table-analytics th {
+        background: #f8f9fa;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .table-analytics td { vertical-align: middle; }
+    .rank-badge {
+        display: inline-block;
+        width: 28px; height: 28px;
+        line-height: 28px;
+        text-align: center;
+        border-radius: 50%;
+        font-weight: 700;
+        font-size: 0.8rem;
+    }
+    .rank-1 { background: #ffd700; color: #333; }
+    .rank-2 { background: #c0c0c0; color: #333; }
+    .rank-3 { background: #cd7f32; color: #fff; }
+    .rank-other { background: #e9ecef; color: #666; }
+    .speed-badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+    .speed-FAST { background: #d4edda; color: #155724; }
+    .speed-NORMAL { background: #fff3cd; color: #856404; }
+    .speed-SLOW { background: #f8d7da; color: #721c24; }
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+    .empty-state i { font-size: 3rem; margin-bottom: 1rem; }
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">📊 Analytics Dashboard</h2>
+            <p class="text-muted mb-0">Aggregate insights across all AutoML runs — powered by raw SQL queries</p>
+        </div>
+        <a href="/api/analytics/export/excel" class="btn btn-success" id="exportExcelBtn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-spreadsheet me-1" viewBox="0 0 16 16">
+                <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V9H3V2a1 1 0 0 1 1-1h5.5zM3 12v-2h2v2zm0 1h2v2H4a1 1 0 0 1-1-1zm3 2v-2h3v2zm4 0v-2h3v1a1 1 0 0 1-1 1zm3-3h-3v-2h3zm-7 0v-2h3v2z"/>
+            </svg>
+            Export to Excel
+        </a>
+    </div>
+
+    <!-- Summary Cards Row -->
+    <div class="row g-3 mb-4" id="summaryCards">
+        <div class="col-md-3">
+            <div class="card stat-card gradient-1">
+                <div class="card-body">
+                    <div class="stat-label">Total Runs</div>
+                    <div class="stat-value" id="totalRuns">—</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card gradient-2">
+                <div class="card-body">
+                    <div class="stat-label">Completed</div>
+                    <div class="stat-value" id="completedRuns">—</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card gradient-3">
+                <div class="card-body">
+                    <div class="stat-label">Avg Best Score</div>
+                    <div class="stat-value" id="avgBestScore">—</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card gradient-4">
+                <div class="card-body">
+                    <div class="stat-label">Task Types</div>
+                    <div class="stat-value" id="taskTypeCount">—</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-4 mb-4">
+        <!-- Global Leaderboard Chart -->
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="section-header">
+                        Global Model Leaderboard
+                        <span class="badge bg-secondary">AVG / GROUP BY / ORDER BY</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="leaderboardChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Run Duration Chart -->
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="section-header">
+                        Run Durations
+                        <span class="badge bg-secondary">CASE WHEN / julianday</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="durationChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tables Row -->
+    <div class="row g-4 mb-4">
+        <!-- Leaderboard Table -->
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="section-header">
+                        Model Performance Summary
+                        <span class="badge bg-secondary">AVG / MIN / MAX / COUNT</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-analytics table-hover" id="leaderboardTable">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th class="text-center">Runs</th>
+                                    <th class="text-center">Avg Score</th>
+                                    <th class="text-center">Min</th>
+                                    <th class="text-center">Max</th>
+                                    <th class="text-center">Avg Time (s)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboardBody">
+                                <tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Type Summary -->
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="section-header">
+                        Task-Type Breakdown
+                        <span class="badge bg-secondary">GROUP BY / HAVING</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-analytics table-hover" id="taskTypeTable">
+                            <thead>
+                                <tr>
+                                    <th>Task Type</th>
+                                    <th class="text-center">Total</th>
+                                    <th class="text-center">✅</th>
+                                    <th class="text-center">❌</th>
+                                    <th class="text-center">Avg Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="taskTypeBody">
+                                <tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Run Durations Table -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="section-header">
+                        Run Duration Details
+                        <span class="badge bg-secondary">CASE WHEN / julianday / ORDER BY</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-analytics table-hover" id="durationsTable">
+                            <thead>
+                                <tr>
+                                    <th>Run ID</th>
+                                    <th>Task Type</th>
+                                    <th class="text-center">Duration (s)</th>
+                                    <th class="text-center">Speed Tier</th>
+                                    <th class="text-center">Best Metric</th>
+                                    <th class="text-center">Best Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="durationsBody">
+                                <tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dataset Profiles Table -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="section-header">
+                        Dataset Profiles
+                        <span class="badge bg-secondary">json_extract / COALESCE / SUBSTR</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-analytics table-hover" id="profilesTable">
+                            <thead>
+                                <tr>
+                                    <th>Run ID</th>
+                                    <th>File</th>
+                                    <th>Target</th>
+                                    <th>Task</th>
+                                    <th class="text-center">Rows</th>
+                                    <th class="text-center">Cols</th>
+                                    <th class="text-center">Best Score</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody id="profilesBody">
+                                <tr><td colspan="8" class="text-center text-muted py-4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Color palette
+    const COLORS = ['#667eea', '#f5576c', '#4facfe', '#43e97b', '#ffa726', '#ab47bc'];
+
+    let leaderboardChartInstance = null;
+    let durationChartInstance = null;
+
+    // ── Fetch all data ─────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', async () => {
+        await Promise.all([
+            loadLeaderboard(),
+            loadTaskTypeSummary(),
+            loadRunDurations(),
+            loadDatasetProfiles()
+        ]);
+    });
+
+    // ── 1. Global Leaderboard ──────────────────────────────────────
+    async function loadLeaderboard() {
+        try {
+            const res = await fetch('/api/analytics/leaderboard');
+            const data = await res.json();
+
+            if (data.length === 0) {
+                document.getElementById('leaderboardBody').innerHTML =
+                    '<tr><td colspan="6" class="empty-state">No completed runs yet. Upload a CSV to get started!</td></tr>';
+                return;
+            }
+
+            // Table
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = data.map((row, i) => `
+                <tr>
+                    <td><strong>${row.model_name}</strong></td>
+                    <td class="text-center">${row.times_trained}</td>
+                    <td class="text-center"><strong>${row.avg_cv_score}</strong></td>
+                    <td class="text-center">${row.min_cv_score}</td>
+                    <td class="text-center">${row.max_cv_score}</td>
+                    <td class="text-center">${row.avg_train_time_sec}s</td>
+                </tr>
+            `).join('');
+
+            // Chart
+            const ctx = document.getElementById('leaderboardChart').getContext('2d');
+            leaderboardChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(r => r.model_name),
+                    datasets: [{
+                        label: 'Avg CV Score',
+                        data: data.map(r => r.avg_cv_score),
+                        backgroundColor: data.map((_, i) => COLORS[i % COLORS.length] + 'CC'),
+                        borderColor: data.map((_, i) => COLORS[i % COLORS.length]),
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        barPercentage: 0.7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `Score: ${ctx.parsed.y.toFixed(4)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: { color: '#f0f0f0' },
+                            title: { display: true, text: 'Avg CV Score' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        } catch(e) {
+            console.error('Leaderboard error:', e);
+        }
+    }
+
+    // ── 2. Task-Type Summary ───────────────────────────────────────
+    async function loadTaskTypeSummary() {
+        try {
+            const res = await fetch('/api/analytics/task-type-summary');
+            const data = await res.json();
+
+            if (data.length === 0) {
+                document.getElementById('taskTypeBody').innerHTML =
+                    '<tr><td colspan="5" class="text-center text-muted py-3">No data</td></tr>';
+                return;
+            }
+
+            // Update summary cards
+            const totals = data.reduce((acc, r) => {
+                acc.total += r.total_runs;
+                acc.completed += r.completed;
+                return acc;
+            }, { total: 0, completed: 0 });
+
+            document.getElementById('totalRuns').textContent = totals.total;
+            document.getElementById('completedRuns').textContent = totals.completed;
+            document.getElementById('taskTypeCount').textContent = data.length;
+
+            const avgScores = data.filter(r => r.avg_best_score != null).map(r => r.avg_best_score);
+            const overallAvg = avgScores.length > 0
+                ? (avgScores.reduce((a,b) => a+b, 0) / avgScores.length).toFixed(4)
+                : '—';
+            document.getElementById('avgBestScore').textContent = overallAvg;
+
+            // Table
+            const tbody = document.getElementById('taskTypeBody');
+            tbody.innerHTML = data.map(row => `
+                <tr>
+                    <td><span class="badge bg-${row.task_type === 'classification' ? 'primary' : 'info'}">${row.task_type}</span></td>
+                    <td class="text-center">${row.total_runs}</td>
+                    <td class="text-center">${row.completed}</td>
+                    <td class="text-center">${row.failed}</td>
+                    <td class="text-center">${row.avg_best_score != null ? row.avg_best_score : '—'}</td>
+                </tr>
+            `).join('');
+        } catch(e) {
+            console.error('Task-type error:', e);
+        }
+    }
+
+    // ── 3. Run Durations ───────────────────────────────────────────
+    async function loadRunDurations() {
+        try {
+            const res = await fetch('/api/analytics/run-durations');
+            const data = await res.json();
+
+            if (data.length === 0) {
+                document.getElementById('durationsBody').innerHTML =
+                    '<tr><td colspan="6" class="text-center text-muted py-3">No completed runs</td></tr>';
+                return;
+            }
+
+            // Table
+            const tbody = document.getElementById('durationsBody');
+            tbody.innerHTML = data.map(row => `
+                <tr>
+                    <td><code>${row.id.substring(0, 8)}…</code></td>
+                    <td><span class="badge bg-${row.task_type === 'classification' ? 'primary' : 'info'}">${row.task_type}</span></td>
+                    <td class="text-center">${row.duration_seconds != null ? row.duration_seconds + 's' : '—'}</td>
+                    <td class="text-center"><span class="speed-badge speed-${row.speed_tier}">${row.speed_tier}</span></td>
+                    <td class="text-center">${row.best_metric_name || '—'}</td>
+                    <td class="text-center"><strong>${row.best_score || '—'}</strong></td>
+                </tr>
+            `).join('');
+
+            // Duration bar chart
+            const ctx = document.getElementById('durationChart').getContext('2d');
+            durationChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(r => r.id.substring(0, 8)),
+                    datasets: [{
+                        label: 'Duration (s)',
+                        data: data.map(r => r.duration_seconds),
+                        backgroundColor: data.map(r => {
+                            if (r.speed_tier === 'FAST') return '#43e97bCC';
+                            if (r.speed_tier === 'NORMAL') return '#ffa726CC';
+                            return '#f5576cCC';
+                        }),
+                        borderRadius: 6,
+                        barPercentage: 0.8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.parsed.x}s (${data[ctx.dataIndex].speed_tier})`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Seconds' },
+                            grid: { color: '#f0f0f0' }
+                        },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+        } catch(e) {
+            console.error('Duration error:', e);
+        }
+    }
+
+    // ── 4. Dataset Profiles ────────────────────────────────────────
+    async function loadDatasetProfiles() {
+        try {
+            const res = await fetch('/api/analytics/dataset-profiles');
+            const data = await res.json();
+
+            if (data.length === 0) {
+                document.getElementById('profilesBody').innerHTML =
+                    '<tr><td colspan="8" class="text-center text-muted py-3">No datasets processed</td></tr>';
+                return;
+            }
+
+            const tbody = document.getElementById('profilesBody');
+            tbody.innerHTML = data.map(row => {
+                const fname = row.filename_tail ? row.filename_tail.split(/[/\\]/).pop() : '—';
+                const created = row.created_at ? new Date(row.created_at).toLocaleString() : '—';
+                return `
+                    <tr>
+                        <td><a href="/runs/${row.run_id}"><code>${row.run_id.substring(0, 8)}…</code></a></td>
+                        <td>${fname}</td>
+                        <td>${row.target_column}</td>
+                        <td><span class="badge bg-${row.task_type === 'classification' ? 'primary' : 'info'}">${row.task_type}</span></td>
+                        <td class="text-center">${row.n_rows != null ? row.n_rows.toLocaleString() : '—'}</td>
+                        <td class="text-center">${row.n_cols || '—'}</td>
+                        <td class="text-center"><strong>${row.best_score}</strong></td>
+                        <td>${created}</td>
+                    </tr>
+                `;
+            }).join('');
+        } catch(e) {
+            console.error('Profiles error:', e);
+        }
+    }
+</script>
+{% endblock %}

@@ -17,7 +17,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Render the homepage with the upload form."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html", {})
 
 @router.get("/runs/{run_id}", response_class=HTMLResponse)
 async def run_status(request: Request, run_id: str, db: Session = Depends(get_db)):
@@ -26,4 +26,9 @@ async def run_status(request: Request, run_id: str, db: Session = Depends(get_db
     if not run:
         return HTMLResponse("Run not found", status_code=404)
         
-    return templates.TemplateResponse("run_status.html", {"request": request, "run": run})
+    return templates.TemplateResponse(request, "run_status.html", {"run": run})
+
+@router.get("/analytics", response_class=HTMLResponse)
+async def analytics_dashboard(request: Request):
+    """Render the analytics BI dashboard page."""
+    return templates.TemplateResponse(request, "analytics.html", {})

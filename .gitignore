@@ -6,6 +6,7 @@ __pycache__/
 env/
 venv/
 .venv/
+*.egg-info/
 
 # Environment
 .env
@@ -16,6 +17,10 @@ venv/
 
 # AutoML Lite artifacts
 uploads/
+artifacts/
 static/artifacts/runs/
 .pytest_cache/
 sample_*.csv
+
+# Personal files
+CV*.md
